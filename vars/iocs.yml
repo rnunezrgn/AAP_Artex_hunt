@@ -1,0 +1,71 @@
+---
+# Historical FBI FLASH indicators, defanged where applicable.
+# Validate freshness/relevance before using these in production hunts.
+artex_ioc_ips:
+  - 101.53.80.20
+  - 205.214.59.31
+  - 124.155.252.63
+  - 154.201.79.246
+  - 23.248.249.90
+  - 23.158.220.98
+  - 103.248.148.84
+  - 203.160.133.172
+  - 209.209.85.38
+  - 199.19.95.166
+  - 199.19.95.67
+  - 199.19.95.68
+  - 91.92.240.238
+  - 85.11.168.45
+  - 178.16.54.129
+  - 31.77.229.135
+  - 85.11.167.152
+# FBI FLASH domain, normalized from defanged form.
+artex_ioc_domains:
+  - xcai.pro
+
+# Names are leads only; validate exact file hashes/signatures from trusted intel.
+artex_tool_name_patterns:
+  - '\bartex(?:[-_ ]?pro)?\b'
+  - '\b(bloodalchemy|wisp|vshell|adaptixc2|cliproxyapi|new[ _-]?api)\b'
+
+artex_llm_api_domains:
+  - api.anthropic.com
+  - api.deepseek.com
+  - open.bigmodel.cn
+  - api.x.ai
+
+artex_suspicious_webshell_extensions:
+  - .aspx
+  - .jsp
+
+artex_linux_paths:
+  - /opt/artex
+  - /usr/local/bin/artex
+  - /usr/bin/artex
+  - /var/lib/artex
+
+artex_windows_paths:
+  - C:\\ProgramData\\Artex
+  - C:\\Windows\\Temp\\artex
+  - C:\\Program Files\\Artex
+
+# Additional test examples, but not necessarily malicious, for hunting and detection.
+#---
+#indicators:
+#  - type: ipv4
+#    value: "192.0.2.10"
+#    source: "Example documentation only"
+#    confidence: low
+#    description: "Reserved documentation IP address"
+#
+#  - type: domain
+#    value: "example.invalid"
+#    source: "Example documentation only"
+#    confidence: low
+#    description: "Reserved example domain"
+#
+#  - type: sha256
+#    value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+#    source: "Example documentation only"
+#    confidence: low
+#    description: "Example SHA-256 value; not a verified malware hash"

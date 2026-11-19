@@ -1,0 +1,52 @@
+---
+- name: Load collection indicators
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../vars/iocs.yml"
+
+- name: Initialize Kubernetes findings
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings | default([]) }}"
+
+- name: Read pods from Kubernetes API
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ item if item != '' else omit }}" 
+  loop: "{{ artex_k8s_namespaces if artex_k8s_namespaces | length > 0 else [''] }}"
+  register: artex_k8s_pods
+  changed_when: false
+
+- name: Flatten pod results
+  ansible.builtin.set_fact:
+    artex_k8s_pod_items: "{{ artex_k8s_pods.results | map(attribute='resources') | flatten }}"
+
+- name: Detect ARTEX/tool-name references in pod metadata and specs
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-K8S-001',
+      'title': 'Pod metadata, image, command or args match a known tool-name pattern',
+      'severity': 'medium',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'kubernetes',
+      'asset': (item.metadata.namespace | default('default')) ~ '/' ~ item.metadata.name,
+      'evidence': {
+        'namespace': item.metadata.namespace | default('default'),
+        'pod': item.metadata.name,
+        'containers': item.spec.containers | default([]) | map(attribute='image') | list
+      },
+      'source': 'Kubernetes Pod API'
+    } ] }}"
+  loop: "{{ artex_k8s_pod_items }}"
+  vars:
+    artex_k8s_text: "{{ item | to_json }}"
+  when: (artex_k8s_text | regex_search('(?i)(?:' ~ (artex_tool_name_patterns | join('|')) ~ ')' )) is not none
+
+- name: Publish Kubernetes scan summary
+  ansible.builtin.set_fact:
+    artex_scan_summary:
+      asset: "{{ inventory_hostname }}"
+      platform: kubernetes
+      finding_count: "{{ artex_findings | length }}"
+      findings: "{{ artex_findings }}"
+      scan_mode: read_only

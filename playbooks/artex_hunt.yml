@@ -1,0 +1,31 @@
+---
+- name: ARTEX read-only hunt
+  hosts: all
+  gather_facts: true
+  collections:
+    - aap_security.artex_detection
+  tasks:
+    - name: Run Linux hunt
+      ansible.builtin.include_role:
+        name: aap_security.artex_detection.linux
+      when: artex_platform | default('') == 'linux'
+
+    - name: Run Windows hunt
+      ansible.builtin.include_role:
+        name: aap_security.artex_detection.windows
+      when: artex_platform | default('') == 'windows'
+
+    - name: Run Kubernetes hunt
+      ansible.builtin.include_role:
+        name: aap_security.artex_detection.kubernetes
+      when: artex_platform | default('') == 'kubernetes'
+
+    - name: Run Azure audit-log hunt
+      ansible.builtin.include_role:
+        name: aap_security.artex_detection.azure
+      when: artex_platform | default('') == 'azure'
+
+    - name: Display normalized summary
+      ansible.builtin.debug:
+        var: artex_scan_summary
+      when: artex_scan_summary is defined

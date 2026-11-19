@@ -1,0 +1,24 @@
+name: artex_detection
+version: 1.1.0
+readme: README.md
+authors:
+  - Security Automation Contributors
+description: Defensive detection and investigation automation with EDA integration
+license:
+  - Apache-2.0
+tags:
+  - security
+  - detection
+  - eda
+  - automation
+  - aap
+repository: https://github.com/YOUR_ORG/artex_detection
+documentation: https://github.com/YOUR_ORG/artex_detection
+issues: https://github.com/YOUR_ORG/artex_detection/issues
+build_ignore:
+  - .github
+  - .git
+  - .venv
+  - __pycache__
+  - "*.pyc"
+  - '*.tar.gz'

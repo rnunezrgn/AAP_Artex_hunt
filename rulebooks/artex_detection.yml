@@ -1,0 +1,25 @@
+
+---
+- name: ARTEX security event detection
+  hosts: all
+
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+
+  rules:
+    - name: Trigger ARTEX investigation
+      condition: >
+        event.payload.event_type is defined and
+        event.payload.event_type == "security_alert"
+
+      action:
+        run_job_template:
+          name: "ARTEX Detection - Investigation"
+          organization: "Default"
+          job_args:
+            extra_vars:
+              target_host: "{{ event.payload.hostname | default('all') }}"
+              source_ip: "{{ event.payload.source_ip | default('unknown') }}"
+              event_id: "{{ event.payload.event_id | default('unknown') }}"

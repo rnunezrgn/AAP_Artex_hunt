@@ -1,0 +1,70 @@
+---
+- name: Load collection indicators
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../vars/iocs.yml"
+
+- name: Initialize Azure findings
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings | default([]) }}"
+
+- name: Match historical ARTEX IP/domain indicators in supplied audit records
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-AZ-001',
+      'title': 'Azure audit record contains a historical ARTEX-linked network indicator',
+      'severity': 'medium',
+      'confidence': 'medium',
+      'classification': 'IOC_MATCH',
+      'platform': 'azure',
+      'asset': inventory_hostname,
+      'evidence': {
+        'record_id': item.id | default(item.correlationId | default('unknown')),
+        'matched_indicators': (
+          (artex_ioc_ips | select('in', item | to_json) | list) +
+          (artex_ioc_domains | select('in', (item | to_json | lower)) | list)
+        ),
+        'operation': item.operationName.value | default(item.operationName | default('unknown')),
+        'time': item.eventTimestamp | default(item.time | default('unknown'))
+      },
+      'source': 'supplied Azure audit record'
+    } ] }}"
+  loop: "{{ artex_azure_audit_records }}"
+  when:
+    - (artex_ioc_ips | select('in', item | to_json) | list | length > 0) or
+      (artex_ioc_domains | select('in', (item | to_json | lower)) | list | length > 0)
+
+- name: Identify suspicious Azure identity and privilege operations for review
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-AZ-002',
+      'title': 'Azure identity or role-management operation requires review',
+      'severity': 'medium',
+      'confidence': 'low',
+      'classification': 'BEHAVIORAL_LEAD',
+      'platform': 'azure',
+      'asset': inventory_hostname,
+      'evidence': {
+        'operation': item.operationName.value | default(item.operationName | default('unknown')),
+        'caller': item.caller | default('unknown'),
+        'time': item.eventTimestamp | default(item.time | default('unknown')),
+        'status': item.status.value | default(item.status | default('unknown'))
+      },
+      'source': 'supplied Azure Activity Log'
+    } ] }}"
+  loop: "{{ artex_azure_audit_records }}"
+  vars:
+    artex_azure_operation: "{{ item.operationName.value | default(item.operationName | default('')) | lower }}"
+  when: >-
+    'roleassignments/write' in artex_azure_operation or
+    'applications/write' in artex_azure_operation or
+    'serviceprincipals' in artex_azure_operation or
+    'add member to role' in artex_azure_operation
+
+- name: Publish Azure scan summary
+  ansible.builtin.set_fact:
+    artex_scan_summary:
+      asset: "{{ inventory_hostname }}"
+      platform: azure
+      finding_count: "{{ artex_findings | length }}"
+      findings: "{{ artex_findings }}"
+      scan_mode: read_only

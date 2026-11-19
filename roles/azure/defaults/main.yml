@@ -1,0 +1,5 @@
+---
+# Supply sanitized records exported from Azure Activity Log / Entra audit log.
+# Each record should be a dictionary; raw secrets/tokens must be removed first.
+artex_azure_audit_records: []
+artex_findings: []

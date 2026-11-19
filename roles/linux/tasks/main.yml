@@ -1,0 +1,96 @@
+---
+- name: Load collection indicators
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../vars/iocs.yml"
+
+- name: Initialize Linux findings
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings | default([]) }}"
+
+- name: Collect process list
+  ansible.builtin.command:
+    argv: [ps, -eo, pid=,ppid=,user=,comm=,args=]
+  register: artex_linux_ps
+  changed_when: false
+  when: artex_scan_processes | bool
+
+- name: Identify ARTEX tool-name process leads
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-LNX-001',
+      'title': 'Process command line matches a known tool-name pattern',
+      'severity': 'medium',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'linux',
+      'asset': inventory_hostname,
+      'evidence': item,
+      'source': 'process_list'
+    } ] }}"
+  loop: "{{ artex_linux_ps.stdout_lines | default([]) }}"
+  when:
+    - artex_scan_processes | bool
+    - (item | regex_search('(?i)(?:' ~ (artex_tool_name_patterns | join('|')) ~ ')' )) is not none
+
+- name: Check known ARTEX paths and operator-supplied paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: "{{ (artex_linux_paths + artex_extra_paths) | unique }}"
+  register: artex_linux_path_stats
+  when: artex_scan_paths | bool
+
+- name: Report known path existence
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-LNX-002',
+      'title': 'Known or configured ARTEX-related path exists',
+      'severity': 'medium',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'linux',
+      'asset': inventory_hostname,
+      'evidence': {'path': item.item, 'is_directory': item.stat.isdir | default(false), 'mode': item.stat.mode | default('unknown')},
+      'source': 'filesystem_stat'
+    } ] }}"
+  loop: "{{ artex_linux_path_stats.results | default([]) }}"
+  when:
+    - artex_scan_paths | bool
+    - item.stat.exists | default(false)
+
+- name: Collect enabled service names
+  ansible.builtin.command:
+    argv: [systemctl, list-units, --type=service, --all, --no-legend, --no-pager]
+  register: artex_linux_services
+  changed_when: false
+  failed_when: false
+  when:
+    - artex_scan_services | bool
+    - ansible_facts.os_family == 'RedHat'
+
+- name: Identify suspicious service names
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-LNX-003',
+      'title': 'Service name matches a known tool-name pattern',
+      'severity': 'low',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'linux',
+      'asset': inventory_hostname,
+      'evidence': item,
+      'source': 'systemd'
+    } ] }}"
+  loop: "{{ artex_linux_services.stdout_lines | default([]) }}"
+  when:
+    - artex_scan_services | bool
+    - (item | regex_search('(?i)(?:' ~ (artex_tool_name_patterns | join('|')) ~ ')' )) is not none
+
+- name: Publish Linux scan summary
+  ansible.builtin.set_fact:
+    artex_scan_summary:
+      asset: "{{ inventory_hostname }}"
+      platform: linux
+      finding_count: "{{ artex_findings | length }}"
+      findings: "{{ artex_findings }}"
+      scan_mode: read_only

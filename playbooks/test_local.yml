@@ -1,0 +1,29 @@
+---
+- name: Validate read-only defaults and finding normalization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    artex_azure_audit_records:
+      - id: test-001
+        operationName:
+          value: Microsoft.Authorization/roleAssignments/write
+        caller: test@example.invalid
+        eventTimestamp: '2026-11-18T00:00:00Z'
+  tasks:
+    - name: Include collection IOC data
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/iocs.yml"
+
+    - name: Assert historical IOC data is present
+      ansible.builtin.assert:
+        that:
+          - artex_ioc_ips | length >= 1
+          - "'xcai.pro' in artex_ioc_domains"
+          - artex_tool_name_patterns | length >= 1
+
+    - name: Assert no response controls are enabled
+      ansible.builtin.assert:
+        that:
+          - artex_response_enabled | default(false) == false
+          - artex_scan_mode | default('read_only') == 'read_only'

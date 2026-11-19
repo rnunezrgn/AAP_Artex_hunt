@@ -1,0 +1,7 @@
+---
+artex_scan_processes: true
+artex_scan_paths: true
+artex_scan_services: true
+artex_extra_paths: []
+artex_process_regex: "{{ artex_tool_name_patterns }}"
+artex_findings: []

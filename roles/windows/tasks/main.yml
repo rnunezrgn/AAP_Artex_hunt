@@ -1,0 +1,89 @@
+---
+- name: Load collection indicators
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../vars/iocs.yml"
+
+- name: Initialize Windows findings
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings | default([]) }}"
+
+- name: Inspect processes, services and known paths (read-only)
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'SilentlyContinue'
+      $result = [ordered]@{ processes = @(); services = @(); paths = @() }
+      if ({{ artex_scan_processes | bool | ternary('$true', '$false') }}) {
+        $result.processes = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine)
+      }
+      if ({{ artex_scan_services | bool | ternary('$true', '$false') }}) {
+        $result.services = @(Get-CimInstance Win32_Service | Select-Object Name, DisplayName, State, StartMode, PathName)
+      }
+      if ({{ artex_scan_paths | bool | ternary('$true', '$false') }}) {
+        $known = @({{ artex_windows_paths | to_json }})
+        $result.paths = @($known | ForEach-Object {
+          if (Test-Path -LiteralPath $_) { Get-Item -LiteralPath $_ | Select-Object FullName, Attributes, Length }
+        })
+      }
+      $result | ConvertTo-Json -Depth 5 -Compress
+  register: artex_windows_inventory
+  changed_when: false
+
+- name: Parse Windows inventory
+  ansible.builtin.set_fact:
+    artex_windows_data: "{{ artex_windows_inventory.output[0] | from_json }}"
+
+- name: Detect Windows process-name or command-line leads
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-WIN-001',
+      'title': 'Process matches known ARTEX-related tool-name pattern',
+      'severity': 'medium',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'windows',
+      'asset': inventory_hostname,
+      'evidence': item,
+      'source': 'Win32_Process'
+    } ] }}"
+  loop: "{{ artex_windows_data.processes | default([]) }}"
+  when: (((item.Name | default('')) ~ ' ' ~ (item.CommandLine | default(''))) | regex_search('(?i)(?:' ~ (artex_tool_name_patterns | join('|')) ~ ')' )) is not none
+
+- name: Detect suspicious Windows services
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-WIN-002',
+      'title': 'Service matches known ARTEX-related tool-name pattern',
+      'severity': 'low',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'windows',
+      'asset': inventory_hostname,
+      'evidence': item,
+      'source': 'Win32_Service'
+    } ] }}"
+  loop: "{{ artex_windows_data.services | default([]) }}"
+  when: (((item.Name | default('')) ~ ' ' ~ (item.DisplayName | default('')) ~ ' ' ~ (item.PathName | default(''))) | regex_search('(?i)(?:' ~ (artex_tool_name_patterns | join('|')) ~ ')' )) is not none
+
+- name: Report known path existence
+  ansible.builtin.set_fact:
+    artex_findings: "{{ artex_findings + [ {
+      'rule_id': 'ARTEX-WIN-003',
+      'title': 'Known ARTEX-related path exists',
+      'severity': 'medium',
+      'confidence': 'low',
+      'classification': 'ARTEX_ARTIFACT',
+      'platform': 'windows',
+      'asset': inventory_hostname,
+      'evidence': item,
+      'source': 'filesystem'
+    } ] }}"
+  loop: "{{ artex_windows_data.paths | default([]) }}"
+
+- name: Publish Windows scan summary
+  ansible.builtin.set_fact:
+    artex_scan_summary:
+      asset: "{{ inventory_hostname }}"
+      platform: windows
+      finding_count: "{{ artex_findings | length }}"
+      findings: "{{ artex_findings }}"
+      scan_mode: read_only

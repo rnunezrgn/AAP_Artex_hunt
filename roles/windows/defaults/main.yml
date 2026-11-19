@@ -1,0 +1,5 @@
+---
+artex_scan_processes: true
+artex_scan_services: true
+artex_scan_paths: true
+artex_findings: []
